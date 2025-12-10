@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Video, Users, Shield, Zap, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Video, Users, Shield, Zap, ArrowRight, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -9,6 +10,7 @@ interface HeroProps {
 }
 
 export function Hero({ onCreateMeeting, onJoinMeeting }: HeroProps) {
+  const navigate = useNavigate();
   const [meetingName, setMeetingName] = useState('');
   const [userName, setUserName] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -152,8 +154,15 @@ export function Hero({ onCreateMeeting, onJoinMeeting }: HeroProps) {
           )}
         </div>
 
-        {/* Footer text */}
-        <p className="mt-8 animate-fade-in text-center text-sm text-muted-foreground">
+        {/* Schedule link */}
+        <div className="mt-8 animate-fade-in text-center">
+          <Button variant="link" onClick={() => navigate('/schedule')}>
+            <Calendar className="h-4 w-4 mr-2" />
+            Schedule a meeting for later
+          </Button>
+        </div>
+        
+        <p className="mt-4 animate-fade-in text-center text-sm text-muted-foreground">
           No account required for guests. Just share the link and connect.
         </p>
       </div>
