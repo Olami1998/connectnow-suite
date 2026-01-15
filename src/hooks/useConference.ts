@@ -18,7 +18,7 @@ interface UseConferenceReturn {
   sendReaction: (emoji: string) => void;
   toggleRecording: () => void;
   updateSettings: (settings: Partial<RoomSettings>) => void;
-  generateInviteLink: () => string;
+  generateInviteLink: (customRoomId?: string) => string;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -205,9 +205,10 @@ export function useConference(): UseConferenceReturn {
     });
   }, []);
 
-  const generateInviteLink = useCallback(() => {
-    if (!room) return '';
-    return `${window.location.origin}/join/${room.id}`;
+  const generateInviteLink = useCallback((customRoomId?: string) => {
+    const id = customRoomId || room?.id;
+    if (!id) return '';
+    return `${window.location.origin}/join/${id}`;
   }, [room]);
 
   return {
