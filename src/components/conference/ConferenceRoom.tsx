@@ -109,7 +109,7 @@ export function ConferenceRoom({
         roomId={roomId}
         isRecording={isRecording}
         startTime={room?.startTime}
-        inviteLink={generateInviteLink()}
+        inviteLink={generateInviteLink(roomId)}
       />
 
       {/* Main Content */}
