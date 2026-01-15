@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Schedule from "./pages/Schedule";
 import CalendarCallback from "./pages/CalendarCallback";
+import JoinMeeting from "./pages/JoinMeeting";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/schedule" element={<Schedule />} />
           <Route path="/calendar-callback" element={<CalendarCallback />} />
+          <Route path="/join/:roomId" element={<JoinMeeting />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
