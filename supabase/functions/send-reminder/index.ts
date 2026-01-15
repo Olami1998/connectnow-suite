@@ -15,6 +15,26 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Verify cron secret to prevent unauthorized access
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    const authHeader = req.headers.get("Authorization");
+    
+    if (!cronSecret) {
+      console.error("CRON_SECRET is not configured");
+      return new Response(
+        JSON.stringify({ error: "Server configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+      console.warn("Unauthorized attempt to call send-reminder function");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
