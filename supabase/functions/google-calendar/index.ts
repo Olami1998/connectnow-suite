@@ -1,13 +1,74 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") ?? "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") ?? "";
+
+// Allowed origins for CORS and redirect validation
+const APP_URL = Deno.env.get("SUPABASE_URL")?.replace(".supabase.co", ".lovable.app") || "";
+const ALLOWED_ORIGINS = [
+  "http://localhost:8080",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://id-preview--d35ff490-bf53-4f82-ba0d-250953b760fa.lovable.app",
+  "https://glide-video-chat.lovable.app",
+].filter(Boolean);
+
+// Rate limiting: track requests per user
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 20; // 20 requests per minute
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const userLimit = rateLimitMap.get(userId);
+  
+  if (!userLimit || now > userLimit.resetTime) {
+    rateLimitMap.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  
+  if (userLimit.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return true;
+  }
+  
+  userLimit.count++;
+  return false;
+}
+
+// Get CORS headers based on request origin
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = ALLOWED_ORIGINS.find(allowed => origin === allowed);
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin || ALLOWED_ORIGINS[0] || "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
+
+// Validate redirect URI against allowed origins
+function validateRedirectUri(redirectUri: string): boolean {
+  try {
+    const url = new URL(redirectUri);
+    return ALLOWED_ORIGINS.some(origin => {
+      try {
+        const allowedUrl = new URL(origin);
+        return url.origin === allowedUrl.origin;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
+// Email validation regex
+const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email);
+}
 
 interface CalendarEventRequest {
   action: "get-auth-url" | "exchange-code" | "create-event" | "delete-event" | "check-connection";
@@ -88,6 +149,9 @@ async function getValidAccessToken(supabase: any, userId: string): Promise<strin
 }
 
 serve(async (req: Request) => {
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -110,6 +174,15 @@ serve(async (req: Request) => {
       throw new Error("Invalid user token");
     }
 
+    // Check rate limit
+    if (isRateLimited(user.id)) {
+      console.warn(`Rate limit exceeded for user: ${user.id}`);
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { action, code, redirectUri, title, description, startTime, endTime, attendees, eventId, meetingId }: CalendarEventRequest = await req.json();
 
     console.log(`Processing action: ${action} for user: ${user.id}`);
@@ -118,6 +191,12 @@ serve(async (req: Request) => {
       case "get-auth-url": {
         if (!redirectUri) {
           throw new Error("Redirect URI is required");
+        }
+
+        // Validate redirect URI against allowlist
+        if (!validateRedirectUri(redirectUri)) {
+          console.warn(`Invalid redirect URI attempted: ${redirectUri}`);
+          throw new Error("Invalid redirect URI");
         }
 
         const scopes = [
@@ -143,6 +222,12 @@ serve(async (req: Request) => {
       case "exchange-code": {
         if (!code || !redirectUri) {
           throw new Error("Code and redirect URI are required");
+        }
+
+        // Validate redirect URI against allowlist
+        if (!validateRedirectUri(redirectUri)) {
+          console.warn(`Invalid redirect URI in exchange: ${redirectUri}`);
+          throw new Error("Invalid redirect URI");
         }
 
         const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -193,6 +278,14 @@ serve(async (req: Request) => {
       case "create-event": {
         if (!title || !startTime || !endTime) {
           throw new Error("Title, start time, and end time are required");
+        }
+
+        // Validate attendee emails if provided
+        if (attendees && attendees.length > 0) {
+          const invalidEmails = attendees.filter(email => !isValidEmail(email));
+          if (invalidEmails.length > 0) {
+            throw new Error(`Invalid email format: ${invalidEmails.join(", ")}`);
+          }
         }
 
         const accessToken = await getValidAccessToken(supabase, user.id);
@@ -289,6 +382,8 @@ serve(async (req: Request) => {
         throw new Error(`Unknown action: ${action}`);
     }
   } catch (error: unknown) {
+    const origin = req.headers.get("origin");
+    const corsHeaders = getCorsHeaders(origin);
     console.error("Error in google-calendar function:", error);
     const message = error instanceof Error ? error.message : "An unexpected error occurred";
     return new Response(

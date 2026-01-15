@@ -4,10 +4,18 @@ import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
+// Minimal CORS headers for cron job (not browser-accessible)
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://supabase.co",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Email validation regex
+const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email);
+}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -75,8 +83,8 @@ serve(async (req: Request) => {
         timeZoneName: "short",
       });
 
-      // Send reminder to host
-      if (meeting.profiles?.email) {
+      // Send reminder to host (validate email first)
+      if (meeting.profiles?.email && isValidEmail(meeting.profiles.email)) {
         try {
           await resend.emails.send({
             from: "MeetFlow <onboarding@resend.dev>",
@@ -109,11 +117,19 @@ serve(async (req: Request) => {
           type: "reminder",
           meeting_id: meeting.id,
         });
+      } else if (meeting.profiles?.email) {
+        console.warn(`Invalid host email format, skipping: ${meeting.profiles.email}`);
       }
 
-      // Send reminders to participants
+      // Send reminders to participants (validate emails first)
       for (const participant of meeting.meeting_participants || []) {
         if (!participant.reminder_sent && participant.email) {
+          // Validate email format before sending
+          if (!isValidEmail(participant.email)) {
+            console.warn(`Invalid participant email format, skipping: ${participant.email}`);
+            continue;
+          }
+
           try {
             await resend.emails.send({
               from: "MeetFlow <onboarding@resend.dev>",
