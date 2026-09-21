@@ -1,17 +1,19 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Clock, Trash2, ExternalLink, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Trash2, ExternalLink, Calendar as CalendarIcon, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScheduledMeeting } from '@/hooks/useScheduledMeetings';
 import { cn } from '@/lib/utils';
 
 interface MeetingsCalendarProps {
   meetings: ScheduledMeeting[];
+  hostId?: string;
   onDeleteMeeting: (meetingId: string) => void;
   onJoinMeeting: (meetingLink: string) => void;
+  onEditMeeting?: (meeting: ScheduledMeeting) => void;
 }
 
-export function MeetingsCalendar({ meetings, onDeleteMeeting, onJoinMeeting }: MeetingsCalendarProps) {
+export function MeetingsCalendar({ meetings, hostId, onDeleteMeeting, onJoinMeeting, onEditMeeting }: MeetingsCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
@@ -186,18 +188,32 @@ export function MeetingsCalendar({ meetings, onDeleteMeeting, onJoinMeeting }: M
                             variant="ghost"
                             size="icon"
                             onClick={() => onJoinMeeting(meeting.meeting_link)}
+                            aria-label="Join meeting"
                           >
                             <ExternalLink className="h-4 w-4" />
                           </Button>
                         )}
+                        {hostId === meeting.host_id && onEditMeeting && !isPast && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onEditMeeting(meeting)}
+                            aria-label="Edit meeting"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {hostId === meeting.host_id && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="text-destructive hover:text-destructive"
                           onClick={() => onDeleteMeeting(meeting.id)}
+                          aria-label="Delete meeting"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
+                        )}
                       </div>
                     </div>
                   </div>

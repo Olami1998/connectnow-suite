@@ -117,7 +117,10 @@ export function WaitingRoom({
         </Button>
 
         <p className="text-center text-xs text-muted-foreground">
-          By joining, you agree to our terms of service
+          By joining, you agree to our{' '}
+          <a href="/terms" className="underline hover:text-foreground">
+            terms of service
+          </a>
         </p>
       </div>
     </div>

@@ -36,12 +36,15 @@ interface ControlBarProps {
   isChatOpen: boolean;
   isParticipantsOpen: boolean;
   participantCount: number;
+  isHandRaised?: boolean;
+  isHost?: boolean;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
   onToggleScreenShare: () => void;
   onToggleRecording: () => void;
   onToggleChat: () => void;
   onToggleParticipants: () => void;
+  onToggleHand?: () => void;
   onOpenSettings: () => void;
   onReaction: (emoji: string) => void;
   onLeave: () => void;
@@ -55,23 +58,28 @@ export function ControlBar({
   isChatOpen,
   isParticipantsOpen,
   participantCount,
+  isHandRaised = false,
+  isHost = false,
   onToggleAudio,
   onToggleVideo,
   onToggleScreenShare,
   onToggleRecording,
   onToggleChat,
   onToggleParticipants,
+  onToggleHand,
   onOpenSettings,
   onReaction,
   onLeave,
 }: ControlBarProps) {
   return (
-    <div className="glass-panel mx-auto mb-4 flex items-center gap-2 px-4 py-3">
+    <div className="glass-panel mx-auto mb-4 flex max-w-full flex-wrap items-center justify-center gap-2 px-4 py-3">
       {/* Primary controls */}
       <div className="flex items-center gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
+              aria-label={isAudioEnabled ? 'Mute microphone' : 'Unmute microphone'}
               onClick={onToggleAudio}
               className={cn(
                 'control-button',
@@ -93,6 +101,8 @@ export function ControlBar({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
+              aria-label={isVideoEnabled ? 'Turn camera off' : 'Turn camera on'}
               onClick={onToggleVideo}
               className={cn(
                 'control-button',
@@ -114,6 +124,8 @@ export function ControlBar({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
+              aria-label={isScreenSharing ? 'Stop sharing screen' : 'Share screen'}
               onClick={onToggleScreenShare}
               className={cn(
                 'control-button',
@@ -140,6 +152,8 @@ export function ControlBar({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
+              aria-label="Participants"
               onClick={onToggleParticipants}
               className={cn(
                 'control-button relative',
@@ -158,6 +172,8 @@ export function ControlBar({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
+              aria-label="Chat"
               onClick={onToggleChat}
               className={cn(
                 'control-button',
@@ -172,7 +188,7 @@ export function ControlBar({
 
         <Popover>
           <PopoverTrigger asChild>
-            <button className="control-button">
+            <button type="button" className="control-button" aria-label="Send a reaction">
               <Smile className="h-5 w-5" />
             </button>
           </PopoverTrigger>
@@ -191,9 +207,27 @@ export function ControlBar({
           </PopoverContent>
         </Popover>
 
+        {onToggleHand && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={isHandRaised ? 'Lower hand' : 'Raise hand'}
+                onClick={onToggleHand}
+                className={cn('control-button', isHandRaised && 'control-button-active')}
+              >
+                <Hand className="h-5 w-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{isHandRaised ? 'Lower hand' : 'Raise hand'}</TooltipContent>
+          </Tooltip>
+        )}
+
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
+              aria-label={isRecording ? 'Stop recording' : 'Start recording'}
               onClick={onToggleRecording}
               className={cn(
                 'control-button',
@@ -206,13 +240,13 @@ export function ControlBar({
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            {isRecording ? 'Stop Recording' : 'Start Recording'}
+            {isRecording ? 'Stop recording this device' : 'Record this device only'}
           </TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <button onClick={onOpenSettings} className="control-button">
+            <button type="button" aria-label="Meeting settings" onClick={onOpenSettings} className="control-button">
               <Settings className="h-5 w-5" />
             </button>
           </TooltipTrigger>
@@ -225,7 +259,12 @@ export function ControlBar({
       {/* Leave button */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <button onClick={onLeave} className="control-button control-button-danger">
+          <button
+            type="button"
+            aria-label="Leave meeting"
+            onClick={onLeave}
+            className="control-button control-button-danger"
+          >
             <PhoneOff className="h-5 w-5" />
           </button>
         </TooltipTrigger>

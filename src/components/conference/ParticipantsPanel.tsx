@@ -17,6 +17,7 @@ interface ParticipantsPanelProps {
   onClose: () => void;
   onAdmit: (participantId: string) => void;
   onRemove: (participantId: string) => void;
+  onMuteAll?: () => void;
 }
 
 export function ParticipantsPanel({
@@ -27,6 +28,7 @@ export function ParticipantsPanel({
   onClose,
   onAdmit,
   onRemove,
+  onMuteAll,
 }: ParticipantsPanelProps) {
   return (
     <div className="glass-panel flex h-full w-80 flex-col animate-slide-in-right">
@@ -35,12 +37,24 @@ export function ParticipantsPanel({
         <h3 className="font-semibold">
           Participants ({participants.length})
         </h3>
-        <button
-          onClick={onClose}
-          className="rounded-lg p-1.5 transition-colors hover:bg-secondary"
-        >
+        <div className="flex items-center gap-1">
+          {isHost && onMuteAll && (
+            <button
+              type="button"
+              onClick={onMuteAll}
+              className="rounded-lg px-2 py-1 text-xs transition-colors hover:bg-secondary"
+            >
+              Mute all
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 transition-colors hover:bg-secondary"
+            aria-label="Close participants"
+          >
           <X className="h-4 w-4" />
-        </button>
+          </button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
@@ -116,6 +130,9 @@ export function ParticipantsPanel({
                         )}
                         {participant.isHost && (
                           <Crown className="h-3 w-3 text-primary" />
+                        )}
+                        {participant.handRaised && (
+                          <span className="text-xs text-primary">Hand</span>
                         )}
                       </span>
                     </div>

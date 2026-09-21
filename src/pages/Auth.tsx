@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
   const { toast } = useToast();
   
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
@@ -24,7 +24,7 @@ export default function Auth() {
 
     try {
       if (mode === 'signup') {
-        const { error } = await signUp(email, password, fullName);
+        const { error, session } = await signUp(email, password, fullName);
         if (error) {
           if (error.message.includes('already registered')) {
             toast({
@@ -39,12 +39,17 @@ export default function Auth() {
               variant: 'destructive',
             });
           }
+        } else if (!session) {
+          toast({
+            title: 'Confirm your email',
+            description: 'We sent a confirmation link. Sign in after you confirm.',
+          });
         } else {
           toast({
             title: 'Welcome!',
             description: 'Your account has been created.',
           });
-          navigate('/');
+          navigate('/schedule');
         }
       } else {
         const { error } = await signIn(email, password);
@@ -59,7 +64,7 @@ export default function Auth() {
             title: 'Welcome back!',
             description: 'You have been signed in.',
           });
-          navigate('/');
+          navigate('/schedule');
         }
       }
     } finally {
@@ -172,6 +177,27 @@ export default function Auth() {
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </form>
+
+          {mode === 'signin' && (
+            <button
+              type="button"
+              className="mt-3 text-sm text-muted-foreground hover:text-foreground"
+              onClick={async () => {
+                if (!email) {
+                  toast({ title: 'Enter your email first', variant: 'destructive' });
+                  return;
+                }
+                const { error } = await resetPassword(email);
+                if (error) {
+                  toast({ title: 'Could not send reset email', description: error.message, variant: 'destructive' });
+                } else {
+                  toast({ title: 'Check your email', description: 'We sent a password reset link.' });
+                }
+              }}
+            >
+              Forgot password?
+            </button>
+          )}
 
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">

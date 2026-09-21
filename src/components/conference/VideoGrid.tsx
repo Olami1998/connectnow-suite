@@ -8,6 +8,8 @@ interface VideoGridProps {
   localStream: MediaStream | null;
   screenStream: MediaStream | null;
   currentUserId: string;
+  mirrorLocal?: boolean;
+  blurLocal?: boolean;
 }
 
 export function VideoGrid({
@@ -15,6 +17,8 @@ export function VideoGrid({
   localStream,
   screenStream,
   currentUserId,
+  mirrorLocal = true,
+  blurLocal = false,
 }: VideoGridProps) {
   const [pinnedId, setPinnedId] = useState<string | null>(null);
 
@@ -81,6 +85,8 @@ export function VideoGrid({
               stream={isLocal ? localStream : participant.stream}
               isLocal={isLocal}
               isPinned={isPinned}
+              mirrored={isLocal && mirrorLocal}
+              blurred={isLocal && blurLocal}
               onPin={() => setPinnedId(isPinned ? null : participant.id)}
               size={
                 isPinned

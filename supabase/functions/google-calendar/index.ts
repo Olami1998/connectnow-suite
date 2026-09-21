@@ -5,13 +5,12 @@ const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") ?? "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") ?? "";
 
 // Allowed origins for CORS and redirect validation
-const APP_URL = Deno.env.get("SUPABASE_URL")?.replace(".supabase.co", ".lovable.app") || "";
+const SITE_URL = Deno.env.get("SITE_URL") || "";
 const ALLOWED_ORIGINS = [
   "http://localhost:8080",
   "http://localhost:5173",
   "http://localhost:3000",
-  "https://id-preview--d35ff490-bf53-4f82-ba0d-250953b760fa.lovable.app",
-  "https://glide-video-chat.lovable.app",
+  SITE_URL,
 ].filter(Boolean);
 
 // Rate limiting: track requests per user
@@ -40,7 +39,7 @@ function isRateLimited(userId: string): boolean {
 function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowedOrigin = ALLOWED_ORIGINS.find(allowed => origin === allowed);
   return {
-    "Access-Control-Allow-Origin": allowedOrigin || ALLOWED_ORIGINS[0] || "*",
+    "Access-Control-Allow-Origin": allowedOrigin || "null",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Credentials": "true",
   };
@@ -71,9 +70,10 @@ function isValidEmail(email: string): boolean {
 }
 
 interface CalendarEventRequest {
-  action: "get-auth-url" | "exchange-code" | "create-event" | "delete-event" | "check-connection";
+  action: "get-auth-url" | "exchange-code" | "create-event" | "delete-event" | "check-connection" | "update-event" | "disconnect";
   code?: string;
   redirectUri?: string;
+  state?: string;
   meetingId?: string;
   title?: string;
   description?: string;
@@ -104,7 +104,7 @@ async function refreshAccessToken(refreshToken: string): Promise<{ access_token:
   return response.json();
 }
 
-async function getValidAccessToken(supabase: any, userId: string): Promise<string | null> {
+async function getValidAccessToken(supabase: ReturnType<typeof createClient>, userId: string): Promise<string | null> {
   const { data: tokenData, error } = await supabase
     .from("google_tokens")
     .select("*")
@@ -183,7 +183,7 @@ serve(async (req: Request) => {
       );
     }
 
-    const { action, code, redirectUri, title, description, startTime, endTime, attendees, eventId, meetingId }: CalendarEventRequest = await req.json();
+    const { action, code, redirectUri, state, title, description, startTime, endTime, attendees, eventId, meetingId }: CalendarEventRequest = await req.json();
 
     console.log(`Processing action: ${action} for user: ${user.id}`);
 
@@ -211,10 +211,12 @@ serve(async (req: Request) => {
         authUrl.searchParams.set("scope", scopes);
         authUrl.searchParams.set("access_type", "offline");
         authUrl.searchParams.set("prompt", "consent");
-        authUrl.searchParams.set("state", user.id);
+        const nonce = crypto.randomUUID();
+        await supabase.from("google_oauth_nonces").insert({ nonce, user_id: user.id });
+        authUrl.searchParams.set("state", nonce);
 
         return new Response(
-          JSON.stringify({ authUrl: authUrl.toString() }),
+          JSON.stringify({ authUrl: authUrl.toString(), state: nonce }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -222,6 +224,25 @@ serve(async (req: Request) => {
       case "exchange-code": {
         if (!code || !redirectUri) {
           throw new Error("Code and redirect URI are required");
+        }
+        if (!state) {
+          throw new Error("OAuth state is required");
+        }
+
+        const { data: nonceRow } = await supabase
+          .from("google_oauth_nonces")
+          .select("nonce, user_id, created_at")
+          .eq("nonce", state)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!nonceRow) {
+          throw new Error("Invalid OAuth state");
+        }
+        const age = Date.now() - new Date(nonceRow.created_at).getTime();
+        await supabase.from("google_oauth_nonces").delete().eq("nonce", state);
+        if (age > 10 * 60 * 1000) {
+          throw new Error("OAuth state expired");
         }
 
         // Validate redirect URI against allowlist
@@ -250,16 +271,16 @@ serve(async (req: Request) => {
 
         const tokens = await tokenResponse.json();
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+        const tokenRow: Record<string, string> = {
+          user_id: user.id,
+          access_token: tokens.access_token,
+          expires_at: expiresAt.toISOString(),
+        };
+        if (tokens.refresh_token) {
+          tokenRow.refresh_token = tokens.refresh_token;
+        }
 
-        // Store tokens
-        await supabase
-          .from("google_tokens")
-          .upsert({
-            user_id: user.id,
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-            expires_at: expiresAt.toISOString(),
-          });
+        await supabase.from("google_tokens").upsert(tokenRow, { onConflict: "user_id" });
 
         return new Response(
           JSON.stringify({ success: true }),
@@ -305,15 +326,10 @@ serve(async (req: Request) => {
             timeZone: "UTC",
           },
           attendees: attendees?.map((email) => ({ email })) || [],
-          conferenceData: {
-            createRequest: {
-              requestId: crypto.randomUUID(),
-            },
-          },
         };
 
         const calendarResponse = await fetch(
-          "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1",
+          "https://www.googleapis.com/calendar/v3/calendars/primary/events",
           {
             method: "POST",
             headers: {
@@ -372,6 +388,51 @@ serve(async (req: Request) => {
           throw new Error("Failed to delete calendar event");
         }
 
+        return new Response(
+          JSON.stringify({ success: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      case "update-event": {
+        if (!eventId || !title || !startTime || !endTime) {
+          throw new Error("Event ID, title, start time, and end time are required");
+        }
+
+        const accessToken = await getValidAccessToken(supabase, user.id);
+        if (!accessToken) {
+          throw new Error("Not connected to Google Calendar");
+        }
+
+        const patchResponse = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              summary: title,
+              description: description || "",
+              start: { dateTime: startTime, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" },
+              end: { dateTime: endTime, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" },
+            }),
+          }
+        );
+
+        if (!patchResponse.ok) {
+          throw new Error("Failed to update calendar event");
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      case "disconnect": {
+        await supabase.from("google_tokens").delete().eq("user_id", user.id);
         return new Response(
           JSON.stringify({ success: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }

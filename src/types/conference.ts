@@ -6,6 +6,7 @@ export interface Participant {
   isVideoOff: boolean;
   isScreenSharing: boolean;
   isSpeaking: boolean;
+  handRaised?: boolean;
   stream?: MediaStream;
   avatar?: string;
 }
@@ -67,7 +68,4 @@ export const REACTION_EMOJIS = ['👍', '👏', '❤️', '😂', '😮', '🎉'
 export const VIRTUAL_BACKGROUNDS = [
   { id: 'none', label: 'None', type: 'none' as const },
   { id: 'blur', label: 'Blur', type: 'blur' as const },
-  { id: 'office', label: 'Office', type: 'image' as const, url: '/backgrounds/office.jpg' },
-  { id: 'nature', label: 'Nature', type: 'image' as const, url: '/backgrounds/nature.jpg' },
-  { id: 'abstract', label: 'Abstract', type: 'image' as const, url: '/backgrounds/abstract.jpg' },
 ];

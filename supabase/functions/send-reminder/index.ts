@@ -13,8 +13,34 @@ const corsHeaders = {
 // Email validation regex
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
+const SITE_URL = Deno.env.get("SITE_URL") || "";
+const ALLOWED_ORIGINS = [
+  "http://localhost:8080",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  SITE_URL,
+].filter(Boolean);
+
+function safeJoinHref(raw: string): string | null {
+  try {
+    const url = new URL(raw);
+    if (!ALLOWED_ORIGINS.includes(url.origin)) return null;
+    if (!url.pathname.startsWith("/join/")) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function isValidEmail(email: string): boolean {
   return EMAIL_REGEX.test(email);
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => {
+    const map: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+    return map[char] ?? char;
+  });
 }
 
 serve(async (req: Request) => {
@@ -83,23 +109,26 @@ serve(async (req: Request) => {
         timeZoneName: "short",
       });
 
+      const joinHref = escapeHtml(safeJoinHref(meeting.meeting_link) || "#");
+      const hostName = escapeHtml(meeting.profiles?.full_name || "there");
+
       // Send reminder to host (validate email first)
       if (meeting.profiles?.email && isValidEmail(meeting.profiles.email)) {
         try {
           await resend.emails.send({
-            from: "MeetFlow <onboarding@resend.dev>",
+            from: Deno.env.get("RESEND_FROM") || "MeetFlow <onboarding@resend.dev>",
             to: [meeting.profiles.email],
             subject: `Reminder: "${meeting.title}" starts in 15 minutes`,
             html: `
               <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #333;">Meeting Reminder</h2>
-                <p>Hi ${meeting.profiles.full_name || "there"},</p>
-                <p>Your meeting "<strong>${meeting.title}</strong>" is starting soon!</p>
+                <p>Hi ${hostName},</p>
+                <p>Your meeting "<strong>${escapeHtml(meeting.title)}</strong>" is starting soon!</p>
                 <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 0;"><strong>Time:</strong> ${meetingTime}</p>
-                  <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> ${meeting.duration_minutes} minutes</p>
+                  <p style="margin: 0;"><strong>Time:</strong> ${escapeHtml(meetingTime)}</p>
+                  <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> ${Number(meeting.duration_minutes) || 30} minutes</p>
                 </div>
-                <a href="${meeting.meeting_link}" style="display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Join Meeting</a>
+                <a href="${joinHref}" style="display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Join Meeting</a>
                 <p style="color: #666; font-size: 14px; margin-top: 30px;">— The MeetFlow Team</p>
               </div>
             `,
@@ -132,20 +161,20 @@ serve(async (req: Request) => {
 
           try {
             await resend.emails.send({
-              from: "MeetFlow <onboarding@resend.dev>",
+              from: Deno.env.get("RESEND_FROM") || "MeetFlow <onboarding@resend.dev>",
               to: [participant.email],
               subject: `Reminder: "${meeting.title}" starts in 15 minutes`,
               html: `
                 <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                   <h2 style="color: #333;">Meeting Reminder</h2>
-                  <p>Hi ${participant.name || "there"},</p>
-                  <p>You're invited to "<strong>${meeting.title}</strong>" which is starting soon!</p>
+                  <p>Hi ${escapeHtml(participant.name || "there")},</p>
+                  <p>You're invited to "<strong>${escapeHtml(meeting.title)}</strong>" which is starting soon!</p>
                   <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <p style="margin: 0;"><strong>Time:</strong> ${meetingTime}</p>
-                    <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> ${meeting.duration_minutes} minutes</p>
-                    <p style="margin: 10px 0 0 0;"><strong>Host:</strong> ${meeting.profiles?.full_name || "Unknown"}</p>
+                    <p style="margin: 0;"><strong>Time:</strong> ${escapeHtml(meetingTime)}</p>
+                    <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> ${Number(meeting.duration_minutes) || 30} minutes</p>
+                    <p style="margin: 10px 0 0 0;"><strong>Host:</strong> ${escapeHtml(meeting.profiles?.full_name || "Unknown")}</p>
                   </div>
-                  <a href="${meeting.meeting_link}" style="display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Join Meeting</a>
+                  <a href="${joinHref}" style="display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Join Meeting</a>
                   <p style="color: #666; font-size: 14px; margin-top: 30px;">— The MeetFlow Team</p>
                 </div>
               `,

@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { X, Monitor, Camera, Mic, Palette, Sliders } from 'lucide-react';
+import { Camera, Mic, Palette, Sliders } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -27,9 +26,15 @@ interface SettingsModalProps {
   selectedAudioDevice: string;
   selectedVideoDevice: string;
   currentQuality: VideoQuality;
+  mirrorVideo: boolean;
+  hdVideo: boolean;
+  background: string;
   onSelectAudioDevice: (deviceId: string) => void;
   onSelectVideoDevice: (deviceId: string) => void;
   onSelectQuality: (quality: VideoQuality) => void;
+  onMirrorChange: (value: boolean) => void;
+  onHdChange: (value: boolean) => void;
+  onBackgroundChange: (id: 'none' | 'blur') => void;
 }
 
 export function SettingsModal({
@@ -40,11 +45,16 @@ export function SettingsModal({
   selectedAudioDevice,
   selectedVideoDevice,
   currentQuality,
+  mirrorVideo,
+  hdVideo,
+  background,
   onSelectAudioDevice,
   onSelectVideoDevice,
   onSelectQuality,
+  onMirrorChange,
+  onHdChange,
+  onBackgroundChange,
 }: SettingsModalProps) {
-  const [selectedBackground, setSelectedBackground] = useState('none');
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -154,7 +164,7 @@ export function SettingsModal({
                   Flip your video horizontally
                 </p>
               </div>
-              <Switch defaultChecked />
+              <Switch checked={mirrorVideo} onCheckedChange={onMirrorChange} />
             </div>
 
             {/* HD Video */}
@@ -165,7 +175,7 @@ export function SettingsModal({
                   Enable high-definition video (uses more bandwidth)
                 </p>
               </div>
-              <Switch />
+              <Switch checked={hdVideo} onCheckedChange={onHdChange} />
             </div>
           </TabsContent>
 
@@ -178,10 +188,10 @@ export function SettingsModal({
                 {VIRTUAL_BACKGROUNDS.map((bg) => (
                   <button
                     key={bg.id}
-                    onClick={() => setSelectedBackground(bg.id)}
+                    onClick={() => onBackgroundChange(bg.id as 'none' | 'blur')}
                     className={cn(
                       'aspect-video rounded-lg border-2 p-2 transition-all',
-                      selectedBackground === bg.id
+                      background === bg.id
                         ? 'border-primary'
                         : 'border-transparent hover:border-primary/50',
                       bg.type === 'none' && 'bg-secondary',
@@ -196,7 +206,7 @@ export function SettingsModal({
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                Note: Virtual backgrounds require additional processing power
+                Blur is applied locally to your preview. Image backgrounds are not included.
               </p>
             </div>
           </TabsContent>

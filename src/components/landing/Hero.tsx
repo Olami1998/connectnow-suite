@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Video, Users, Shield, Zap, ArrowRight, Calendar } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Video, Users, Lock, Zap, ArrowRight, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface HeroProps {
-  onCreateMeeting: (name: string, userName: string) => void;
+  onCreateMeeting: (name: string, userName: string) => void | Promise<void>;
   onJoinMeeting: (roomId: string) => void;
+  creating?: boolean;
 }
 
-export function Hero({ onCreateMeeting, onJoinMeeting }: HeroProps) {
+export function Hero({ onCreateMeeting, onJoinMeeting, creating = false }: HeroProps) {
   const navigate = useNavigate();
   const [meetingName, setMeetingName] = useState('');
   const [userName, setUserName] = useState('');
@@ -48,6 +50,12 @@ export function Hero({ onCreateMeeting, onJoinMeeting }: HeroProps) {
 
       {/* Content */}
       <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-20">
+        <div className="absolute right-4 top-4 flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/auth')}>
+            Sign in
+          </Button>
+          <ThemeToggle />
+        </div>
         {/* Badge */}
         <div className="mb-8 animate-fade-in rounded-full border border-primary/30 bg-primary/10 px-4 py-2">
           <span className="flex items-center gap-2 text-sm font-medium text-primary">
@@ -72,7 +80,7 @@ export function Hero({ onCreateMeeting, onJoinMeeting }: HeroProps) {
           {[
             { icon: Video, label: 'HD Video' },
             { icon: Users, label: 'Up to 8 people' },
-            { icon: Shield, label: 'End-to-end encrypted' },
+            { icon: Lock, label: 'DTLS-SRTP media' },
           ].map(({ icon: Icon, label }) => (
             <div
               key={label}
@@ -125,11 +133,11 @@ export function Hero({ onCreateMeeting, onJoinMeeting }: HeroProps) {
                 className="bg-secondary/50"
               />
               <Button
-                onClick={handleCreate}
-                disabled={!meetingName.trim() || !userName.trim()}
+                onClick={() => void handleCreate()}
+                disabled={!meetingName.trim() || !userName.trim() || creating}
                 className="w-full gradient-primary"
               >
-                Start Meeting
+                {creating ? 'Starting...' : 'Start Meeting'}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -164,6 +172,11 @@ export function Hero({ onCreateMeeting, onJoinMeeting }: HeroProps) {
         
         <p className="mt-4 animate-fade-in text-center text-sm text-muted-foreground">
           No account required for guests. Just share the link and connect.
+        </p>
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          <Link to="/terms" className="underline hover:text-foreground">Terms</Link>
+          {' · '}
+          <Link to="/privacy" className="underline hover:text-foreground">Privacy</Link>
         </p>
       </div>
     </div>

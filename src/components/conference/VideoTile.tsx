@@ -10,6 +10,8 @@ interface VideoTileProps {
   isPinned?: boolean;
   onPin?: () => void;
   size?: 'small' | 'medium' | 'large';
+  mirrored?: boolean;
+  blurred?: boolean;
 }
 
 export function VideoTile({
@@ -19,6 +21,8 @@ export function VideoTile({
   isPinned = false,
   onPin,
   size = 'medium',
+  mirrored = false,
+  blurred = false,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -56,7 +60,11 @@ export function VideoTile({
           autoPlay
           playsInline
           muted={isLocal}
-          className="absolute inset-0 h-full w-full object-cover"
+          className={cn(
+            'absolute inset-0 h-full w-full object-cover',
+            mirrored && 'scale-x-[-1]',
+            blurred && 'blur-xl scale-110',
+          )}
         />
       )}
 

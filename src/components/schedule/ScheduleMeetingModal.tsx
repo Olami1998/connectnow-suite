@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { CalendarIcon, Clock, Users, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,11 +26,13 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { ScheduledMeeting } from '@/hooks/useScheduledMeetings';
 
 interface ScheduleMeetingModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   googleConnected: boolean;
+  meeting?: ScheduledMeeting | null;
   onSchedule: (
     title: string,
     description: string,
@@ -63,6 +65,7 @@ export function ScheduleMeetingModal({
   open,
   onOpenChange,
   googleConnected,
+  meeting,
   onSchedule,
 }: ScheduleMeetingModalProps) {
   const [title, setTitle] = useState('');
@@ -74,6 +77,16 @@ export function ScheduleMeetingModal({
   const [participants, setParticipants] = useState<string[]>([]);
   const [syncToGoogle, setSyncToGoogle] = useState(googleConnected);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!meeting) return;
+    const when = new Date(meeting.scheduled_at);
+    setTitle(meeting.title);
+    setDescription(meeting.description || '');
+    setDate(when);
+    setTime(`${when.getHours().toString().padStart(2, '0')}:${when.getMinutes() >= 30 ? '30' : '00'}`);
+    setDuration(String(meeting.duration_minutes));
+  }, [meeting]);
 
   const addParticipant = () => {
     if (participantEmail && !participants.includes(participantEmail)) {
@@ -124,7 +137,7 @@ export function ScheduleMeetingModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarIcon className="h-5 w-5" />
-            Schedule Meeting
+            {meeting ? 'Reschedule meeting' : 'Schedule Meeting'}
           </DialogTitle>
         </DialogHeader>
 
@@ -211,6 +224,7 @@ export function ScheduleMeetingModal({
             </Select>
           </div>
 
+          {!meeting && (
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Users className="h-4 w-4" />
@@ -247,8 +261,8 @@ export function ScheduleMeetingModal({
               </div>
             )}
           </div>
-
-          {googleConnected && (
+          )}
+          {googleConnected && !meeting && (
             <div className="flex items-center justify-between border-t pt-4">
               <div className="flex items-center gap-2">
                 <svg viewBox="0 0 24 24" className="h-5 w-5">
@@ -287,7 +301,7 @@ export function ScheduleMeetingModal({
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={!title || !date || loading}>
-            {loading ? 'Scheduling...' : 'Schedule Meeting'}
+            {loading ? 'Saving...' : meeting ? 'Save changes' : 'Schedule Meeting'}
           </Button>
         </div>
       </DialogContent>

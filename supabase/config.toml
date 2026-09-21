@@ -1,1 +1,13 @@
 project_id = "kwdajvbbfblvczncrqvl"
+
+[functions.google-calendar]
+verify_jwt = true
+
+[functions.send-invite]
+verify_jwt = true
+
+[functions.send-reminder]
+verify_jwt = false
+
+[functions.meeting-room]
+verify_jwt = false

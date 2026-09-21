@@ -28,7 +28,7 @@ export function useAuth() {
   const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -36,7 +36,7 @@ export function useAuth() {
         data: { full_name: fullName },
       },
     });
-    return { error };
+    return { error, session: data.session };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -52,6 +52,18 @@ export function useAuth() {
     return { error };
   }, []);
 
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    return { error };
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    return { error };
+  }, []);
+
   return {
     user,
     session,
@@ -59,5 +71,7 @@ export function useAuth() {
     signUp,
     signIn,
     signOut,
+    resetPassword,
+    updatePassword,
   };
 }

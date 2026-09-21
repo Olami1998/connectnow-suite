@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, Shield, Circle, Clock } from 'lucide-react';
+import { Copy, Check, Lock, Circle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -67,8 +67,8 @@ export function MeetingHeader({
 
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-1 rounded-full bg-success/20 px-2 py-1 text-xs text-success">
-          <Shield className="h-3 w-3" />
-          Encrypted
+          <Lock className="h-3 w-3" />
+          DTLS-SRTP
         </div>
 
         <Button

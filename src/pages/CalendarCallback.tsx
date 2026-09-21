@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,11 +8,25 @@ export default function CalendarCallback() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Connecting to Google Calendar...');
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
     const exchangeCode = async () => {
       const code = searchParams.get('code');
       const error = searchParams.get('error');
+      const state = searchParams.get('state');
+      const expectedState = sessionStorage.getItem('google_oauth_state');
+      const lockKey = code ? `gcal_${code}` : '';
+
+      if (lockKey && sessionStorage.getItem(lockKey) === 'done') {
+        setStatus('success');
+        setMessage('Google Calendar connected successfully!');
+        setTimeout(() => navigate('/schedule'), 2000);
+        return;
+      }
 
       if (error) {
         setStatus('error');
@@ -28,6 +42,13 @@ export default function CalendarCallback() {
         return;
       }
 
+      if (!state || !expectedState || state !== expectedState) {
+        setStatus('error');
+        setMessage('OAuth state mismatch. Please try connecting again.');
+        setTimeout(() => navigate('/schedule'), 3000);
+        return;
+      }
+
       try {
         const redirectUri = localStorage.getItem('google_calendar_redirect') || `${window.location.origin}/calendar-callback`;
         
@@ -36,6 +57,7 @@ export default function CalendarCallback() {
             action: 'exchange-code',
             code,
             redirectUri,
+            state,
           },
         });
 
@@ -44,6 +66,8 @@ export default function CalendarCallback() {
         }
 
         localStorage.removeItem('google_calendar_redirect');
+        sessionStorage.removeItem('google_oauth_state');
+        if (lockKey) sessionStorage.setItem(lockKey, 'done');
         setStatus('success');
         setMessage('Google Calendar connected successfully!');
         setTimeout(() => navigate('/schedule'), 2000);

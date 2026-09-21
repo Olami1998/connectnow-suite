@@ -7,8 +7,10 @@ import { ScheduleMeetingModal } from '@/components/schedule/ScheduleMeetingModal
 import { NotificationsDropdown } from '@/components/schedule/NotificationsDropdown';
 import { UpcomingMeetings } from '@/components/schedule/UpcomingMeetings';
 import { useAuth } from '@/hooks/useAuth';
-import { useScheduledMeetings } from '@/hooks/useScheduledMeetings';
+import { useScheduledMeetings, ScheduledMeeting } from '@/hooks/useScheduledMeetings';
 import { useNotifications } from '@/hooks/useNotifications';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { meetingJoinPath, parseMeetingInput } from '@/lib/meeting';
 
 export default function Schedule() {
   const navigate = useNavigate();
@@ -18,12 +20,15 @@ export default function Schedule() {
     loading: meetingsLoading,
     googleConnected,
     connectGoogleCalendar,
+    disconnectGoogleCalendar,
     createMeeting,
+    updateMeeting,
     deleteMeeting,
   } = useScheduledMeetings();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState<ScheduledMeeting | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -32,7 +37,8 @@ export default function Schedule() {
   }, [user, authLoading, navigate]);
 
   const handleJoinMeeting = (meetingLink: string) => {
-    window.open(meetingLink, '_blank');
+    const id = parseMeetingInput(meetingLink);
+    if (id) navigate(meetingJoinPath(id));
   };
 
   const handleSchedule = async (
@@ -43,6 +49,11 @@ export default function Schedule() {
     participantEmails: string[],
     syncToGoogle: boolean
   ) => {
+    if (editingMeeting) {
+      await updateMeeting(editingMeeting.id, title, description, scheduledAt, durationMinutes);
+      setEditingMeeting(null);
+      return;
+    }
     await createMeeting(title, description, scheduledAt, durationMinutes, participantEmails, syncToGoogle);
   };
 
@@ -86,7 +97,7 @@ export default function Schedule() {
               onMarkAsRead={markAsRead}
               onMarkAllAsRead={markAllAsRead}
             />
-            
+            <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={handleSignOut}>
               <LogOut className="h-4 w-4 mr-2" />
               Sign Out
@@ -139,14 +150,13 @@ export default function Schedule() {
                 )}
                 
                 {googleConnected && (
-                  <div className="flex items-center gap-2 text-sm text-success">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4">
-                      <path
-                        fill="#34A853"
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      />
-                    </svg>
-                    Google Calendar connected
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-success">
+                      Google Calendar connected
+                    </div>
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => void disconnectGoogleCalendar()}>
+                      Disconnect
+                    </Button>
                   </div>
                 )}
               </div>
@@ -168,8 +178,13 @@ export default function Schedule() {
           <div className="flex-1">
             <MeetingsCalendar
               meetings={meetings}
+              hostId={user?.id}
               onDeleteMeeting={deleteMeeting}
               onJoinMeeting={handleJoinMeeting}
+              onEditMeeting={(meeting) => {
+                setEditingMeeting(meeting);
+                setScheduleModalOpen(true);
+              }}
             />
           </div>
         </div>
@@ -177,8 +192,12 @@ export default function Schedule() {
 
       <ScheduleMeetingModal
         open={scheduleModalOpen}
-        onOpenChange={setScheduleModalOpen}
+        onOpenChange={(open) => {
+          setScheduleModalOpen(open);
+          if (!open) setEditingMeeting(null);
+        }}
         googleConnected={googleConnected}
+        meeting={editingMeeting}
         onSchedule={handleSchedule}
       />
     </div>

@@ -1,87 +1,68 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Hero } from '@/components/landing/Hero';
-import { WaitingRoom } from '@/components/conference/WaitingRoom';
-import { ConferenceRoom } from '@/components/conference/ConferenceRoom';
-import { useMediaDevices } from '@/hooks/useMediaDevices';
-
-type AppState = 'landing' | 'waiting' | 'meeting';
+import { meetingJoinPath, parseMeetingInput, saveHostToken } from '@/lib/meeting';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
-  const [appState, setAppState] = useState<AppState>('landing');
-  const [roomId, setRoomId] = useState('');
-  const [roomName, setRoomName] = useState('');
-  const [userName, setUserName] = useState('');
-  const [guestName, setGuestName] = useState('');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { toast } = useToast();
+  const [creating, setCreating] = useState(false);
 
-  const {
-    localStream,
-    isAudioEnabled,
-    isVideoEnabled,
-    initializeMedia,
-    toggleAudio,
-    toggleVideo,
-    stopAllMedia,
-  } = useMediaDevices();
+  useEffect(() => {
+    const legacyRoom = searchParams.get('room');
+    if (legacyRoom) {
+      const id = parseMeetingInput(legacyRoom);
+      if (id) navigate(meetingJoinPath(id), { replace: true });
+    }
+  }, [navigate, searchParams]);
 
-  const handleCreateMeeting = (name: string, hostName: string) => {
-    setRoomName(name);
-    setUserName(hostName);
-    setRoomId(Math.random().toString(36).substring(2, 10));
-    setAppState('meeting');
+  const handleCreateMeeting = async (name: string, hostName: string) => {
+    setCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('meeting-room', {
+        body: { action: 'create', name },
+      });
+      if (error || data?.error || !data?.roomId || !data?.hostToken) {
+        throw new Error(data?.error || error?.message || 'Could not create room');
+      }
+      saveHostToken(data.roomId, data.hostToken);
+      const params = new URLSearchParams({
+        name: hostName.slice(0, 80),
+        title: name.slice(0, 80),
+      });
+      navigate(`${meetingJoinPath(data.roomId)}?${params.toString()}`);
+    } catch (err) {
+      toast({
+        title: 'Could not start meeting',
+        description: err instanceof Error ? err.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const handleJoinMeeting = async (code: string) => {
-    setRoomId(code);
-    setRoomName('Meeting Room');
-    await initializeMedia();
-    setAppState('waiting');
+  const handleJoinMeeting = (code: string) => {
+    const roomId = parseMeetingInput(code);
+    if (!roomId) {
+      toast({
+        title: 'Invalid meeting code',
+        description: 'Paste a MeetFlow join link or an 8–64 character room code.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    navigate(meetingJoinPath(roomId));
   };
-
-  const handleJoinFromWaiting = () => {
-    setUserName(guestName);
-    setAppState('meeting');
-  };
-
-  const handleLeaveMeeting = () => {
-    stopAllMedia();
-    setAppState('landing');
-    setRoomId('');
-    setRoomName('');
-    setUserName('');
-    setGuestName('');
-  };
-
-  if (appState === 'waiting') {
-    return (
-      <WaitingRoom
-        roomName={roomName}
-        guestName={guestName}
-        localStream={localStream}
-        isVideoEnabled={isVideoEnabled}
-        isAudioEnabled={isAudioEnabled}
-        onNameChange={setGuestName}
-        onToggleVideo={toggleVideo}
-        onToggleAudio={toggleAudio}
-        onJoin={handleJoinFromWaiting}
-      />
-    );
-  }
-
-  if (appState === 'meeting') {
-    return (
-      <ConferenceRoom
-        roomId={roomId}
-        roomName={roomName}
-        userName={userName}
-        onLeave={handleLeaveMeeting}
-      />
-    );
-  }
 
   return (
     <Hero
       onCreateMeeting={handleCreateMeeting}
       onJoinMeeting={handleJoinMeeting}
+      creating={creating}
     />
   );
 };
