@@ -2,21 +2,41 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-
 const SITE_URL = Deno.env.get("SITE_URL") || "";
 const ALLOWED_ORIGINS = [
   "http://localhost:8080",
+  "http://127.0.0.1:8080",
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
   "http://localhost:3000",
+  "http://127.0.0.1:3000",
   SITE_URL,
 ].filter(Boolean);
 
+const CORS_HEADERS =
+  "authorization, x-client-info, apikey, content-type, x-supabase-api-version, prefer, x-region";
+
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    const lan = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(url.hostname);
+    const port = url.port || (url.protocol === "https:" ? "443" : "80");
+    return (local || lan) && ["8080", "5173", "3000"].includes(port);
+  } catch {
+    return false;
+  }
+}
+
 function getCorsHeaders(origin: string | null): Record<string, string> {
-  const allowedOrigin = ALLOWED_ORIGINS.find((allowed) => origin === allowed);
+  const allowed = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0] || "http://localhost:8080";
   return {
-    "Access-Control-Allow-Origin": allowedOrigin || "null",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": CORS_HEADERS,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
   };
 }
 
@@ -86,6 +106,10 @@ serve(async (req: Request) => {
     if (!originOk || !joinUrl.pathname.startsWith("/join/")) {
       throw new Error("Meeting link is not a MeetFlow join URL");
     }
+
+    const resendKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendKey) throw new Error("Email is not configured");
+    const resend = new Resend(resendKey);
 
     const title = meeting.title as string;
     const description = (meeting.description as string) || "";

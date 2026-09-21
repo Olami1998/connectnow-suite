@@ -2,15 +2,11 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-
-// Minimal CORS headers for cron job (not browser-accessible)
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://supabase.co",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Email validation regex
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
 const SITE_URL = Deno.env.get("SITE_URL") || "";
@@ -81,8 +77,7 @@ serve(async (req: Request) => {
     const { data: upcomingMeetings, error: meetingsError } = await supabase
       .from("scheduled_meetings")
       .select(`
-        *,
-        profiles:host_id (email, full_name),
+        id, host_id, title, description, scheduled_at, duration_minutes, meeting_link,
         meeting_participants (email, name, reminder_sent)
       `)
       .gte("scheduled_at", now.toISOString())
@@ -96,9 +91,19 @@ serve(async (req: Request) => {
 
     console.log(`Found ${upcomingMeetings?.length || 0} upcoming meetings to send reminders for`);
 
+    const resendKey = Deno.env.get("RESEND_API_KEY");
+    const resend = resendKey ? new Resend(resendKey) : null;
+
     const results = [];
 
     for (const meeting of upcomingMeetings || []) {
+      const { data: hostProfile } = await supabase
+        .from("profiles")
+        .select("email, full_name")
+        .eq("id", meeting.host_id)
+        .maybeSingle();
+      meeting.profiles = hostProfile;
+
       const meetingTime = new Date(meeting.scheduled_at).toLocaleString("en-US", {
         weekday: "long",
         year: "numeric",
@@ -115,7 +120,8 @@ serve(async (req: Request) => {
       // Send reminder to host (validate email first)
       if (meeting.profiles?.email && isValidEmail(meeting.profiles.email)) {
         try {
-          await resend.emails.send({
+          if (resend) {
+            await resend.emails.send({
             from: Deno.env.get("RESEND_FROM") || "MeetFlow <onboarding@resend.dev>",
             to: [meeting.profiles.email],
             subject: `Reminder: "${meeting.title}" starts in 15 minutes`,
@@ -133,6 +139,7 @@ serve(async (req: Request) => {
               </div>
             `,
           });
+          }
           console.log(`Sent reminder to host: ${meeting.profiles.email}`);
         } catch (emailError) {
           console.error(`Failed to send email to host ${meeting.profiles.email}:`, emailError);
@@ -160,6 +167,7 @@ serve(async (req: Request) => {
           }
 
           try {
+            if (resend) {
             await resend.emails.send({
               from: Deno.env.get("RESEND_FROM") || "MeetFlow <onboarding@resend.dev>",
               to: [participant.email],
@@ -179,6 +187,7 @@ serve(async (req: Request) => {
                 </div>
               `,
             });
+            }
             console.log(`Sent reminder to participant: ${participant.email}`);
 
             // Mark participant reminder as sent

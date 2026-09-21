@@ -4,20 +4,42 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SITE_URL = Deno.env.get("SITE_URL") || "";
 const ALLOWED_ORIGINS = [
   "http://localhost:8080",
+  "http://127.0.0.1:8080",
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
   "http://localhost:3000",
+  "http://127.0.0.1:3000",
   SITE_URL,
 ].filter(Boolean);
 
-const MAX_PARTICIPANTS = 8;
+const CORS_HEADERS =
+  "authorization, x-client-info, apikey, content-type, x-supabase-api-version, prefer, x-region";
+
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    const lan = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(url.hostname);
+    const port = url.port || (url.protocol === "https:" ? "443" : "80");
+    return (local || lan) && ["8080", "5173", "3000"].includes(port);
+  } catch {
+    return false;
+  }
+}
 
 function cors(origin: string | null): Record<string, string> {
-  const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : "null";
+  const allowed = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0] || "http://localhost:8080";
   return {
     "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": CORS_HEADERS,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
   };
 }
+
+const MAX_PARTICIPANTS = 8;
 
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));

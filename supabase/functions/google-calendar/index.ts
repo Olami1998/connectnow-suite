@@ -8,10 +8,40 @@ const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") ?? "";
 const SITE_URL = Deno.env.get("SITE_URL") || "";
 const ALLOWED_ORIGINS = [
   "http://localhost:8080",
+  "http://127.0.0.1:8080",
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
   "http://localhost:3000",
+  "http://127.0.0.1:3000",
   SITE_URL,
 ].filter(Boolean);
+
+const CORS_HEADERS =
+  "authorization, x-client-info, apikey, content-type, x-supabase-api-version, prefer, x-region";
+
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    const lan = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(url.hostname);
+    const port = url.port || (url.protocol === "https:" ? "443" : "80");
+    return (local || lan) && ["8080", "5173", "3000"].includes(port);
+  } catch {
+    return false;
+  }
+}
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowed = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0] || "http://localhost:8080";
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": CORS_HEADERS,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
+  };
+}
 
 // Rate limiting: track requests per user
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -36,27 +66,9 @@ function isRateLimited(userId: string): boolean {
 }
 
 // Get CORS headers based on request origin
-function getCorsHeaders(origin: string | null): Record<string, string> {
-  const allowedOrigin = ALLOWED_ORIGINS.find(allowed => origin === allowed);
-  return {
-    "Access-Control-Allow-Origin": allowedOrigin || "null",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Credentials": "true",
-  };
-}
-
-// Validate redirect URI against allowed origins
 function validateRedirectUri(redirectUri: string): boolean {
   try {
-    const url = new URL(redirectUri);
-    return ALLOWED_ORIGINS.some(origin => {
-      try {
-        const allowedUrl = new URL(origin);
-        return url.origin === allowedUrl.origin;
-      } catch {
-        return false;
-      }
-    });
+    return isAllowedOrigin(new URL(redirectUri).origin);
   } catch {
     return false;
   }
